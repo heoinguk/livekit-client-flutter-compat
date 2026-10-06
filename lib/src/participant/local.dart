@@ -1,3 +1,5 @@
+// Modified: backport upstream LiveKit PR #1146 (202ce369ff329a6be687990d4ca63e38ca9bbe9c)
+// to v2.4.3; pass publish options as non-nullable negotiate parameters.
 // Copyright 2024 LiveKit, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,9 +121,9 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
       encryption: room.roomOptions.lkEncryptionType,
     );
 
-    Future<lk_models.TrackInfo> negotiate() async {
+    Future<lk_models.TrackInfo> negotiate(AudioPublishOptions options) async {
       track.transceiver = await room.engine
-          .createTransceiverRTCRtpSender(track, publishOptions!, encodings);
+          .createTransceiverRTCRtpSender(track, options, encodings);
       await room.engine.negotiate();
       return lk_models.TrackInfo();
     }
@@ -129,7 +131,7 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
     late lk_models.TrackInfo trackInfo;
     if (room.engine.enabledPublishCodecs?.isNotEmpty ?? false) {
       final rets = await Future.wait<lk_models.TrackInfo>(
-          [room.engine.addTrack(req), negotiate()]);
+          [room.engine.addTrack(req), negotiate(publishOptions)]);
       trackInfo = rets[0];
     } else {
       trackInfo = await room.engine.addTrack(req);
@@ -302,22 +304,22 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
 
     logger.fine('Video layers: ${layers.map((e) => e)}');
 
-    Future<lk_models.TrackInfo> negotiate() async {
+    Future<lk_models.TrackInfo> negotiate(VideoPublishOptions options) async {
       track.transceiver = await room.engine
-          .createTransceiverRTCRtpSender(track, publishOptions!, encodings);
+          .createTransceiverRTCRtpSender(track, options, encodings);
 
       if (lkBrowser() != BrowserType.firefox) {
         await room.engine.setPreferredCodec(
           track.transceiver!,
           'video',
-          publishOptions.videoCodec,
+          options.videoCodec,
         );
-        track.codec = publishOptions.videoCodec;
+        track.codec = options.videoCodec;
       }
 
       if ([TrackSource.camera, TrackSource.screenShareVideo]
           .contains(track.source)) {
-        var degradationPreference = publishOptions.degradationPreference ??
+        var degradationPreference = options.degradationPreference ??
             getDefaultDegradationPreference(
               track,
             );
@@ -328,12 +330,12 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
           lkBrowser() == BrowserType.firefox &&
           track.kind == TrackType.AUDIO) {
         //TOOD:
-      } else if (isSVCCodec(publishOptions.videoCodec) &&
+      } else if (isSVCCodec(options.videoCodec) &&
           encodings?.first.maxBitrate != null) {
         room.engine.publisher?.setTrackBitrateInfo(TrackBitrateInfo(
             cid: track.getCid(),
             transceiver: track.transceiver,
-            codec: publishOptions.videoCodec,
+            codec: options.videoCodec,
             maxbr: encodings![0].maxBitrate! ~/ 1000));
       }
 
@@ -370,7 +372,7 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
     late lk_models.TrackInfo trackInfo;
     if (room.engine.enabledPublishCodecs?.isNotEmpty ?? false) {
       final rets = await Future.wait<lk_models.TrackInfo>(
-          [room.engine.addTrack(req), negotiate()]);
+          [room.engine.addTrack(req), negotiate(publishOptions)]);
       trackInfo = rets[0];
     } else {
       trackInfo = await room.engine.addTrack(req);
